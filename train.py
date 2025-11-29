@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import hydra
 import lightning.pytorch as pl
 from omegaconf import DictConfig
@@ -7,32 +5,38 @@ from omegaconf import DictConfig
 
 @hydra.main(version_base=None, config_path="configs", config_name="train")
 def main(cfg: DictConfig) -> None:
+    """Entry point for training with Lightning + Hydra.
+
+    Checkpointing and logging follow the recommended Lightning patterns:
+    - automatic best/last checkpoints via ModelCheckpoint callback;
+    - metrics logged through Lightning to the configured logger (MLflow).
+    """
     # reproducibility
     pl.seed_everything(cfg.seed, workers=True)
 
-    # data module
     datamodule = hydra.utils.instantiate(cfg.data_module)
 
-    # lightning model (внутри уже зашита базовая модель, оптимизатор и шедулер)
     model = hydra.utils.instantiate(cfg.model)
 
-    # mlflow logger (если включён в конфиге)
+    # mlflow logger (if enabled in config)
     logger = None
     if cfg.logging.mlflow.enable:
         logger = hydra.utils.instantiate(cfg.mlflow_logger)
 
+    # instantiate callbacks from config if present
+    callbacks = [
+        hydra.utils.instantiate(cb_cfg)
+        for cb_cfg in getattr(cfg, "callbacks", {}) or {}
+    ]
+
     # trainer
-    trainer = hydra.utils.instantiate(cfg.trainer, logger=logger)
-
-    # запуск обучения
-    trainer.fit(model=model, datamodule=datamodule)
-
-    # Для удобства сохраняем финальный чекпоинт в указанную папку
-    save_dir = Path(cfg.train.save_dir)
-    save_dir.mkdir(parents=True, exist_ok=True)
-    trainer.save_checkpoint(
-        str(save_dir / f"{type(model.net).__name__.lower()}_final.ckpt")
+    trainer = hydra.utils.instantiate(
+        cfg.trainer,
+        logger=logger,
+        callbacks=callbacks,
     )
+
+    trainer.fit(model=model, datamodule=datamodule)
 
 
 if __name__ == "__main__":
