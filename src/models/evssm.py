@@ -101,10 +101,6 @@ class EDFFN(nn.Module):
 
 class SS2D(nn.Module):
     def __init__(self, d_model, num_heads=8, dropout=0.0, **kwargs):
-        """
-        Упрощённый 2D-блок внимания без mamba-ssm.
-        Вместо селективного сканирования используем стандартный MultiheadAttention по пространству (H*W).
-        """
         super().__init__()
         self.d_model = d_model
         self.num_heads = num_heads

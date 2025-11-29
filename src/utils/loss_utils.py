@@ -63,26 +63,6 @@ def weighted_loss(loss_func):
     and reduction arguments to the function. The decorated function will have
     the signature like `loss_func(pred, target, weight=None, reduction='mean',
     **kwargs)`.
-
-    :Example:
-
-    >>> import torch
-    >>> @weighted_loss
-    >>> def l1_loss(pred, target):
-    >>>     return (pred - target).abs()
-
-    >>> pred = torch.Tensor([0, 2, 3])
-    >>> target = torch.Tensor([1, 1, 1])
-    >>> weight = torch.Tensor([1, 0, 1])
-
-    >>> l1_loss(pred, target)
-    tensor(1.3333)
-    >>> l1_loss(pred, target, weight)
-    tensor(1.5000)
-    >>> l1_loss(pred, target, reduction='none')
-    tensor([1., 1., 2.])
-    >>> l1_loss(pred, target, weight, reduction='sum')
-    tensor(3.)
     """
 
     @functools.wraps(loss_func)

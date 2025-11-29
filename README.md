@@ -10,7 +10,7 @@
   - `utils/` — функции обучения, валидации, метрики, лоссы
   - `scripts/` — вспомогательные скрипты для инференса/оценки
 - `configs/` — конфиги **Hydra** (гиперпараметры данных, модели, обучения, логирования)
-- `train.py` — входная точка обучения (Hydra + mlflow)
+- `train.py` — входная точка обучения (Hydra + PyTorch Lightning)
 - `Task.md` — формулировка задания
 
 ------------------------------------
@@ -55,12 +55,11 @@ Image-Deblurring/
       ...
 ```
 
-Пути к папкам `data/blur` и `data/sharp` настраиваются в конфиге `configs/train.yaml`:
+Корневая директория с данными настраивается в конфиге `configs/train.yaml`:
 
 ```yaml
 data:
-  blur_dir: "data/blur"
-  sharp_dir: "data/sharp"
+  data_dir: "data"  # внутри ожидаются подпапки blur/ и sharp/
 ```
 
 Позже сюда можно встроить `dvc.api` или `download_data()` для автоматической загрузки.
@@ -69,7 +68,7 @@ data:
 ### Train
 ------------------------------------
 
-Обучение управляется конфигом **Hydra** `configs/train.yaml`. Базовый запуск:
+Обучение управляется конфигом **Hydra** `configs/train.yaml` и `PyTorch Lightning Trainer`. Базовый запуск (EVSSM):
 
 ```bash
 python train.py
@@ -82,32 +81,11 @@ Hydra создаст рабочую директорию в `./outputs/...`, а 
 ```bash
 # изменить число эпох и батч-сайз
 python train.py train.epochs=50 data.batch_size=8
-------------------------------------
-### Logging (mlflow)
-------------------------------------
 
-Проект логирует метрики и гиперпараметры в **mlflow** (минимум 3 графика: loss, PSNR, SSIM).
+# изменить директорию с данными (внутри должны быть подпапки blur/ и sharp/)
+python train.py data.data_dir="path/to/data_root"
 
-Адрес трекинг‑сервера задаётся в `configs/train.yaml`:
-
-```yaml
-logging:
-  mlflow:
-    enable: true
-    tracking_uri: "http://127.0.0.1:8080"
-    experiment_name: "image-deblurring"
-```
-
-Перед запуском обучения нужно поднять mlflow‑сервер (для локальных тестов):
-
-```bash
-mlflow server --host 127.0.0.1 --port 8080
-```
-
-Далее запуски `python train.py` будут:
-
-- логировать метрики (`train_loss`, `val_loss`, `train_psnr`, `val_psnr`, `train_ssim`, `val_ssim`);
-- логировать основные гиперпараметры (`seed`, `batch_size`, `lr`, `epochs`, `model_name`);
-- сохранять чекпоинты моделей и складывать их в артефакты mlflow.
+# запустить простой UNet вместо EVSSM
+python train.py --config-name unet
 
 ------------------------------------
