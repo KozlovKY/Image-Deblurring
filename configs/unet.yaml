@@ -16,19 +16,19 @@ data:
   drop_last: true
 
 model:
-  # Простой UNet в качестве основной модели, создаётся через hydra.utils.instantiate(cfg.model)
-  name: "unet"
-  _target_: src.models.unet.UNet
-
-optimizer:
-  _target_: torch.optim.Adam
-  lr: 5e-4
-
-scheduler:
-  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-  mode: "min"
-  patience: 5
-  factor: 0.5
+  # Lightning-модуль деблюринга с простым UNet внутри
+  _target_: src.training.lit_module.LitDeblurring
+  model_name: "unet"
+  net:
+    _target_: src.models.unet.UNet
+  optimizer_cfg:
+    _target_: torch.optim.Adam
+    lr: 5e-4
+  scheduler_cfg:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    mode: "min"
+    patience: 5
+    factor: 0.5
 
 train:
   epochs: 100
@@ -40,3 +40,24 @@ logging:
     enable: true
     tracking_uri: "http://127.0.0.1:8080"
     experiment_name: "image-deblurring-unet"
+
+data_module:
+  _target_: src.training.datamodule.DeblurDataModule
+  data_dir: ${data.data_dir}
+  batch_size: ${data.batch_size}
+  num_workers: ${data.num_workers}
+  pin_memory: ${data.pin_memory}
+  drop_last: ${data.drop_last}
+
+trainer:
+  _target_: lightning.pytorch.trainer.Trainer
+  max_epochs: ${train.epochs}
+  accelerator: "auto"
+  devices: 1
+  default_root_dir: ${train.save_dir}
+  log_every_n_steps: 10
+
+mlflow_logger:
+  _target_: lightning.pytorch.loggers.MLFlowLogger
+  experiment_name: ${logging.mlflow.experiment_name}
+  tracking_uri: ${logging.mlflow.tracking_uri}
