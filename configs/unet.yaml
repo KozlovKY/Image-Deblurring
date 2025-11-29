@@ -1,0 +1,42 @@
+defaults:
+  - _self_
+
+seed: 42
+
+data:
+  # Корневая директория с данными; внутри ожидаются подпапки "blur" и "sharp".
+  # Можно переопределять из CLI: python train.py --config-name unet data.data_dir="path/to/data"
+  data_dir: "data"
+  blur_dir: "${data.data_dir}/blur"
+  sharp_dir: "${data.data_dir}/sharp"
+  batch_size: 16
+  num_workers: 8
+  val_split: 0.2
+  pin_memory: true
+  drop_last: true
+
+model:
+  # Простой UNet в качестве основной модели, создаётся через hydra.utils.instantiate(cfg.model)
+  name: "unet"
+  _target_: src.models.unet.UNet
+
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 5e-4
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  mode: "min"
+  patience: 5
+  factor: 0.5
+
+train:
+  epochs: 100
+  device: "cuda"  # или "cpu"
+  save_dir: "models_unet"
+
+logging:
+  mlflow:
+    enable: true
+    tracking_uri: "http://127.0.0.1:8080"
+    experiment_name: "image-deblurring-unet"
