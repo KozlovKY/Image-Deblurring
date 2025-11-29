@@ -15,7 +15,7 @@ from src.data.transforms import CNN_NORMALIZATION_MEAN, CNN_NORMALIZATION_STD
 
 
 class LitDeblurring(pl.LightningModule):
-    """LightningModule, оборачивающий модель деблюринга и лосс/метрики проекта."""
+    """LightningModule, wrapping the deblurring model and loss/metrics of the project."""
 
     def __init__(
         self,

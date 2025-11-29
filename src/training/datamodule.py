@@ -9,7 +9,7 @@ from src.data.transforms import TEST_TRANSFORMS, TRAIN_TRANSFORMS
 
 
 class DeblurDataModule(pl.LightningDataModule):
-    """Lightning DataModule для датасета размытия/восстановления."""
+    """Lightning DataModule for the blur/deblur dataset."""
 
     def __init__(
         self,
@@ -33,8 +33,6 @@ class DeblurDataModule(pl.LightningDataModule):
         blur_dir = to_absolute_path(f"{self.data_dir}/blur")
         sharp_dir = to_absolute_path(f"{self.data_dir}/sharp")
 
-        # Для простоты используем одинаковый набор файлов,
-        # различаются только аугментации.
         self.train_dataset = BlurImageDataset(
             blur_dir=blur_dir,
             sharp_dir=sharp_dir,
