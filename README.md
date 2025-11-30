@@ -1,82 +1,102 @@
-## Blur-removal / Image Deblurring
+## Image Deblurring
 
-------------------------------------
+---
+
+### Описание
+
+---
+
+Проект для восстановления резкости изображений (image deblurring) с использованием стека **PyTorch Lightning + Hydra**.
+
+Основные компоненты:
+
+- **PyTorch / Lightning** — обучение и логика моделей;
+- **Hydra** — управление конфигами и экспериментами;
+- **MLflow** — логирование экспериментов;
+
+---
+
 ### Структура проекта
-------------------------------------
 
-- `src/` — python‑пакет с кодом:
-  - `data/` — датасеты и аугментации (albumentations)
-  - `models/` — модели деблюринга (UNet, Attention UNet, EVSSM и др.)
-  - `utils/` — функции обучения, валидации, метрики, лоссы
-  - `scripts/` — вспомогательные скрипты для инференса/оценки
-- `configs/` — конфиги **Hydra** (гиперпараметры данных, модели, обучения, логирования)
-- `train.py` — входная точка обучения (Hydra + PyTorch Lightning)
-- `Task.md` — формулировка задания
+---
 
-------------------------------------
-### Setup
-------------------------------------
+- **`src/`** — python‑пакет с основным кодом:
+  - **`data/`** — датасеты и аугментации (albumentations);
+  - **`models/`** — модели деблюринга
+  - **`training/`** — Lightning‑модуль (`LitDeblurring`) и DataModule;
+  - **`utils/`** — метрики, лоссы;
+  - **`scripts/`** — вспомогательные скрипты для инференса.
+- **`configs/`** — конфиги **Hydra** (данные, модель, обучение, логирование).
+- **`data/preprocessing/`** — скрипты подготовки датасета (распаковка RSBlur, генерация `.npy`).
+- **`train.py`** — входная точка обучения (Hydra + PyTorch Lightning).
+
+---
+
+### Setup (uv + editable install)
+
+---
 
 #### 1. Клонировать репозиторий
 
 ```bash
-git clone <URL_ВАШЕГО_РЕПОЗИТОРИЯ>
+git clone https://github.com/KozlovKY/Image-Deblurring.git
 cd Image-Deblurring
 ```
 
-#### 2. Создать conda‑окружение из `env.yml`
+#### 2. Создать окружение через `uv` и установить пакет
 
 ```bash
-conda env create -f env.yml      # или mamba env create -f env.yml
-conda activate image-deblurring
+# установить uv, если ещё не установлен
+pip install uv
+uv venv .venv
+
+# Linux / macOS:
+source .venv/bin/activate
+# Windows:
+.venv\Scripts\Activate.ps1
+
+uv pip install -e .
 ```
 
-Окружение настроено под Python 3.10 и включает все основные зависимости проекта
-(`torch`, `torchvision`, albumentations, scikit-image, mlflow, wandb и т.д.),
-перечисленные в `setup.py` / `pyproject.toml` и используемые в скриптах.
+Окружение рассчитано на Python 3.10, а полный список базовых зависимостей зашит в `pyproject.toml`.
 
-После создания окружения можно сразу запускать обучение.
+---
 
+### Подготовка данных
 
-#### 4. Подготовка данных
+---
 
-Ожидается, что данные лежат в виде пар размытого и резкого изображения (png/jpg):
+Для работы с датасетом **RSBlur** в репозитории есть скрипты предварительной обработки:
 
-```text
-Image-Deblurring/
-  data/
-    blur/
-      0001.png
-      0002.png
-      ...
-    sharp/
-      0001.png
-      0002.png
-      ...
-```
+- **`data/preprocessing/extract_datasets.sh`** — распаковка частями заархивированного датасета в `data/datasets/RSBlur/...`;
+- **`data/preprocessing/create_npy_files.py`** — конвертация изображений RSBlur в `.npy` для обучения.
 
-Корневая директория с данными настраивается в конфиге `configs/train.yaml`:
+Детальная инструкция по шагам приведена в `data/preprocessing/README.md`.
 
-```yaml
-data:
-  data_dir: "data"  # внутри ожидаются подпапки blur/ и sharp/
-```
+Дополнительно подготовка данных интегрирована в **dvc-пайплайн** (`dvc.yaml`):
 
-Позже сюда можно встроить `dvc.api` или `download_data()` для автоматической загрузки.
+- стадия `rsblur_extract` — распаковка шардов из `data/zip` в `data/datasets/RSBlur`;
+- стадия `rsblur_npy` — генерация `.npy` файлов.
 
-------------------------------------
-### Train
-------------------------------------
+При запуске обучения `train.py` автоматически вызовет `dvc repro rsblur_npy` (если `dvc` установлен и `dvc.yaml` присутствует), что соответствует требованиям задания по Data management.
 
-Обучение управляется конфигом **Hydra** `configs/train.yaml` и `PyTorch Lightning Trainer`. Базовый запуск (EVSSM):
+---
+
+### Обучение моделей
+
+---
+
+Обучение управляется конфигами **Hydra** (по умолчанию `configs/evssm.yaml`) и `PyTorch Lightning Trainer`.
+
+- **Базовый запуск (EVSSM)**:
 
 ```bash
 python train.py
 ```
 
-Hydra создаст рабочую директорию в `./outputs/...`, а гиперпараметры возьмёт из `configs/train.yaml`.
+Hydra создаст рабочую директорию в `./outputs/...`, а гиперпараметры возьмёт из `configs/evssm.yaml`.
 
-Примеры полезных оверрайдов прямо из CLI:
+- **Примеры оверрайдов из CLI**:
 
 ```bash
 # изменить число эпох и батч-сайз
@@ -85,7 +105,10 @@ python train.py train.epochs=50 data.batch_size=8
 # изменить директорию с данными (внутри должны быть подпапки blur/ и sharp/)
 python train.py data.data_dir="path/to/data_root"
 
-# запустить простой UNet вместо EVSSM
-python train.py --config-name unet
+# запустить альтернативную модель (convnet вместо EVSSM)
+python train.py --config-name convnet
+```
 
-------------------------------------
+Lightning‑колбэки для чекпоинтов и мониторинга lr конфигурируются в `configs/evssm.yaml` / `configs/convnet.yaml` (секция `callbacks`).
+
+---
