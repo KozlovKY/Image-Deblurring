@@ -1,9 +1,10 @@
 import hydra
 import lightning.pytorch as pl
+import torch
 from omegaconf import DictConfig
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="train")
+@hydra.main(version_base=None, config_path="configs", config_name="evssm")
 def main(cfg: DictConfig) -> None:
     """Entry point for training with Lightning + Hydra.
 
@@ -14,19 +15,22 @@ def main(cfg: DictConfig) -> None:
     # reproducibility
     pl.seed_everything(cfg.seed, workers=True)
 
+    # Optimize for Tensor Cores on CUDA devices
+    if torch.cuda.is_available():
+        torch.set_float32_matmul_precision("medium")
+
+    # ensure_data(stage=None)
+
     datamodule = hydra.utils.instantiate(cfg.data_module)
 
     model = hydra.utils.instantiate(cfg.model)
 
     # mlflow logger (if enabled in config)
-    logger = None
-    if cfg.logging.mlflow.enable:
-        logger = hydra.utils.instantiate(cfg.mlflow_logger)
-
+    logger = hydra.utils.instantiate(cfg.mlflow_logger)
     # instantiate callbacks from config if present
     callbacks = [
         hydra.utils.instantiate(cb_cfg)
-        for cb_cfg in getattr(cfg, "callbacks", {}) or {}
+        for cb_cfg in (getattr(cfg, "callbacks", {}) or {}).values()
     ]
 
     # trainer

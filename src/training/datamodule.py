@@ -13,14 +13,20 @@ class DeblurDataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        data_dir: str = "data",
+        train_blur_dir: str,
+        train_sharp_dir: str,
+        val_blur_dir: str,
+        val_sharp_dir: str,
         batch_size: int = 16,
         num_workers: int = 8,
         pin_memory: bool = True,
         drop_last: bool = True,
     ) -> None:
         super().__init__()
-        self.data_dir = data_dir
+        self.train_blur_dir = train_blur_dir
+        self.train_sharp_dir = train_sharp_dir
+        self.val_blur_dir = val_blur_dir
+        self.val_sharp_dir = val_sharp_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
@@ -30,17 +36,19 @@ class DeblurDataModule(pl.LightningDataModule):
         self.val_dataset: Optional[BlurImageDataset] = None
 
     def setup(self, stage: Optional[str] = None) -> None:
-        blur_dir = to_absolute_path(f"{self.data_dir}/blur")
-        sharp_dir = to_absolute_path(f"{self.data_dir}/sharp")
+        train_blur_dir = to_absolute_path(self.train_blur_dir)
+        train_sharp_dir = to_absolute_path(self.train_sharp_dir)
+        val_blur_dir = to_absolute_path(self.val_blur_dir)
+        val_sharp_dir = to_absolute_path(self.val_sharp_dir)
 
         self.train_dataset = BlurImageDataset(
-            blur_dir=blur_dir,
-            sharp_dir=sharp_dir,
+            blur_dir=train_blur_dir,
+            sharp_dir=train_sharp_dir,
             transforms=TRAIN_TRANSFORMS,
         )
         self.val_dataset = BlurImageDataset(
-            blur_dir=blur_dir,
-            sharp_dir=sharp_dir,
+            blur_dir=val_blur_dir,
+            sharp_dir=val_sharp_dir,
             transforms=TEST_TRANSFORMS,
         )
 

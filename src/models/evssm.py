@@ -1,12 +1,9 @@
+import numbers
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numbers
-from einops import rearrange, repeat
-import math
-
-from torchvision.transforms.functional import resize, to_pil_image  # type: ignore
-import numpy as np
+from einops import rearrange
 
 
 def to_3d(x):
@@ -100,31 +97,24 @@ class EDFFN(nn.Module):
 
 
 class SS2D(nn.Module):
+    """Replaced SSM block with lightweight conv block to reduce memory usage."""
+
     def __init__(self, d_model, num_heads=8, dropout=0.0, **kwargs):
         super().__init__()
         self.d_model = d_model
-        self.num_heads = num_heads
-        self.attn = nn.MultiheadAttention(
-            d_model, num_heads, dropout=dropout, batch_first=True
+        # Replace attention with lightweight conv block
+        self.conv = nn.Sequential(
+            nn.Conv2d(
+                d_model, d_model, kernel_size=3, padding=1, groups=d_model, bias=False
+            ),
+            nn.Conv2d(d_model, d_model, kernel_size=1, bias=False),
         )
-        self.out_proj = nn.Linear(d_model, d_model)
-        self.dropout = nn.Dropout(dropout) if dropout > 0.0 else None
 
     def forward(self, x: torch.Tensor, **kwargs):
-        # x: (B, C, H, W)
-        B, C, H, W = x.shape
-        # (B, C, H, W) -> (B, L, C), где L = H*W
-        x_flat = x.view(B, C, H * W).permute(0, 2, 1)
-        y, _ = self.attn(x_flat, x_flat, x_flat)
-        y = self.out_proj(y)
-        if self.dropout is not None:
-            y = self.dropout(y)
-        # (B, L, C) -> (B, C, H, W)
-        y = y.permute(0, 2, 1).contiguous().view(B, C, H, W)
-        return y
+        # Simple conv block instead of attention
+        return self.conv(x)
 
 
-##########################################################################
 class EVS(nn.Module):
     def __init__(
         self,
@@ -151,7 +141,6 @@ class EVS(nn.Module):
 
     def forward(self, x):
         if self.att:
-
             if self.idx % 2 == 1:
                 x = torch.flip(x, dims=(-2, -1)).contiguous()
             if self.idx % 2 == 0:
@@ -211,12 +200,13 @@ class Upsample(nn.Module):
 class EVSSM(nn.Module):
     def __init__(
         self,
-        inp_channels=3,
-        out_channels=3,
-        dim=48,
-        num_blocks=[6, 6, 12],
-        ffn_expansion_factor=3,
-        bias=False,
+        inp_channels,
+        out_channels,
+        dim,
+        num_blocks,
+        num_refinement_blocks,
+        ffn_expansion_factor,
+        bias,
     ):
         super(EVSSM, self).__init__()
 

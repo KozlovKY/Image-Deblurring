@@ -2,16 +2,15 @@ from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 import cv2
-import numpy as np
 import torch.utils.data as data
 
 
 class BlurImageDataset(data.Dataset):
-    """Датасет для размытия / восстановления по исходным PNG/JPEG изображениям.
+    """
+    Dataset for image deblurring/restoration from original PNG/JPEG images.
 
-    Ожидается, что в двух директориях лежат файлы с одинаковыми именами
-    (или совпадающими по сортировке), в одной — размытые картинки, в другой —
-    соответствующие им резкие.
+    Expects two directories containing files with matching names (or matching by sorting order):
+    one for blurred images, and the other for their corresponding sharp images.
     """
 
     def __init__(

@@ -1,7 +1,6 @@
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
-import cv2
-import numpy as np
+
 
 # Custom transformation to crop to dimensions divisible by 32
 class CropToDivisibleBy32(A.DualTransform):

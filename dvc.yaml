@@ -1,0 +1,25 @@
+stages:
+  rsblur_download:
+    cmd: python data/scripts/yandex_download.py
+    deps:
+      - data/scripts/yandex_download.py
+    outs:
+      - data/zip
+
+  rsblur_extract:
+    cmd: bash data/scripts/extract_shards.sh
+    deps:
+      - data/zip
+      - data/scripts/extract_shards.sh
+    outs:
+      - data/datasets/RSBlur
+
+  rsblur_split:
+    cmd: python data/scripts/split_train_val.py
+    deps:
+      - data/datasets/RSBlur
+      - data/datasets/RSblur_splits/RSBlur_real_train.txt
+      - data/datasets/RSblur_splits/RSBlur_real_val.txt
+      - data/scripts/split_train_val.py
+    outs:
+      - data/datasets/rsblur_train_val

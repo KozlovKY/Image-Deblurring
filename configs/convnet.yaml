@@ -1,0 +1,88 @@
+defaults:
+  - _self_
+
+seed: 42
+
+data:
+  train_blur_dir: "data/datasets/rsblur_train_val/blur_train"
+  train_sharp_dir: "data/datasets/rsblur_train_val/sharp_train"
+  val_blur_dir: "data/datasets/rsblur_train_val/blur_val"
+  val_sharp_dir: "data/datasets/rsblur_train_val/sharp_val"
+  batch_size: 16
+  num_workers: 8
+  pin_memory: true
+  drop_last: true
+
+model:
+  _target_: src.training.lit_module.LitDeblurring
+  _recursive_: false
+  net:
+    _target_: src.models.deblurnet.DeblurCNN
+  optimizer:
+    _target_: torch.optim.Adam
+    _partial_: true
+    lr: 5e-4
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    _partial_: true
+    mode: "min"
+    patience: 5
+    factor: 0.5
+  loss_cfg:
+    components:
+      - _target_: src.utils.losses.PSNRLoss
+  metrics_cfg:
+    components:
+      - name: psnr
+        _target_: src.utils.metrics.PSNRMetric
+      - name: ssim
+        _target_: src.utils.metrics.SSIMMetric
+
+train:
+  epochs: 100
+  device: "cuda:0"
+  save_dir: "${hydra:runtime.output_dir}/checkpoints"
+
+logging:
+  mlflow:
+    enable: true
+    experiment_name: "image-deblurring-convnet"
+    tracking_uri: http://127.0.0.1:8080
+data_module:
+  _target_: src.training.datamodule.DeblurDataModule
+  train_blur_dir: ${data.train_blur_dir}
+  train_sharp_dir: ${data.train_sharp_dir}
+  val_blur_dir: ${data.val_blur_dir}
+  val_sharp_dir: ${data.val_sharp_dir}
+  batch_size: ${data.batch_size}
+  num_workers: ${data.num_workers}
+  pin_memory: ${data.pin_memory}
+  drop_last: ${data.drop_last}
+
+trainer:
+  _target_: lightning.pytorch.trainer.Trainer
+  max_epochs: ${train.epochs}
+  accelerator: "auto"
+  devices: 1
+  default_root_dir: ${hydra:runtime.output_dir}
+  log_every_n_steps: 10
+
+callbacks:
+  model_checkpoint:
+    _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    monitor: "val_loss"
+    mode: "min"
+    save_top_k: 2
+    save_last: true
+    filename: "epoch={epoch:03d}-val_loss={val_loss:.4f}"
+    auto_insert_metric_name: false
+    dirpath: "${train.save_dir}"
+
+  lr_monitor:
+    _target_: lightning.pytorch.callbacks.LearningRateMonitor
+    logging_interval: "epoch"
+
+mlflow_logger:
+  _target_: lightning.pytorch.loggers.MLFlowLogger
+  experiment_name: ${logging.mlflow.experiment_name}
+  tracking_uri: ${logging.mlflow.tracking_uri}
