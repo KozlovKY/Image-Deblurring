@@ -1,17 +1,12 @@
-from __future__ import annotations
-
 from typing import Any, Dict, Optional
 
 import hydra
 import lightning.pytorch as pl
 import torch
 from omegaconf import DictConfig
-from torch import nn
 
-from src.utils.denormalize import denormalize
-from src.utils.losses import FFTLoss
-from src.utils.metrics import calculate_psnr, calculate_ssim
 from src.data.transforms import CNN_NORMALIZATION_MEAN, CNN_NORMALIZATION_STD
+from src.utils.denormalize import denormalize
 
 
 class LitDeblurring(pl.LightningModule):
@@ -19,23 +14,61 @@ class LitDeblurring(pl.LightningModule):
 
     def __init__(
         self,
-        net: nn.Module,
-        optimizer_cfg: DictConfig,
-        scheduler_cfg: Optional[DictConfig] = None,
-        model_name: str = "model",
+        net: Any,
+        optimizer: Any,
+        scheduler: Optional[Any] = None,
+        loss_cfg: Optional[DictConfig] = None,
+        metrics_cfg: Optional[DictConfig] = None,
     ) -> None:
         super().__init__()
-        self.net = net
-        self.optimizer_cfg = optimizer_cfg
-        self.scheduler_cfg = scheduler_cfg
-        self.model_name = model_name
+        # Handle net - can be DictConfig or already instantiated
+        if isinstance(net, DictConfig):
+            self.net = hydra.utils.instantiate(net)
+        else:
+            self.net = net
 
-        self.l1_loss = nn.L1Loss()
-        self.fft_loss = FFTLoss()
-        self.lambda_fft = 0.1
+        # Handle optimizer - can be DictConfig or already instantiated (partial)
+        if isinstance(optimizer, DictConfig):
+            self.optimizer = hydra.utils.instantiate(optimizer)
+        else:
+            self.optimizer = optimizer
+
+        # Handle scheduler - can be DictConfig or already instantiated (partial)
+        if scheduler is not None:
+            if isinstance(scheduler, DictConfig):
+                self.scheduler = hydra.utils.instantiate(scheduler)
+            else:
+                self.scheduler = scheduler
+        else:
+            self.scheduler = None
+
+        # Single loss
+        loss_config = loss_cfg["components"][0]
+        self.loss_fn = hydra.utils.instantiate(loss_config)
+
+        # Metrics
+        self.metrics = {}
+        for metric_item in metrics_cfg["components"]:
+            metric_name = metric_item["name"]
+            metric_fn = hydra.utils.instantiate(metric_item)
+            self.metrics[metric_name] = metric_fn
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
+
+    def _denormalize_for_metrics(
+        self, outputs: torch.Tensor, sharp_image: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Denormalize and clamp images to [0, 1] range for metric computation."""
+        outputs_denorm = denormalize(
+            outputs, CNN_NORMALIZATION_MEAN, CNN_NORMALIZATION_STD
+        )
+        sharp_denorm = denormalize(
+            sharp_image, CNN_NORMALIZATION_MEAN, CNN_NORMALIZATION_STD
+        )
+        outputs_denorm = torch.clamp(outputs_denorm, 0.0, 1.0)
+        sharp_denorm = torch.clamp(sharp_denorm, 0.0, 1.0)
+        return outputs_denorm, sharp_denorm
 
     def _shared_step(self, batch: Any, stage: str) -> Dict[str, torch.Tensor]:
         sharp_image, blur_image = batch
@@ -44,41 +77,31 @@ class LitDeblurring(pl.LightningModule):
 
         outputs = self(blur_image)
 
-        loss_l1 = self.l1_loss(outputs, sharp_image)
-        loss_fft = self.fft_loss(outputs, sharp_image)
-        loss = loss_l1 + self.lambda_fft * loss_fft
+        # compute loss
+        total_loss = self.loss_fn(outputs, sharp_image)
 
-        # Денормализация и метрики
-        outputs_denorm = denormalize(
-            outputs, CNN_NORMALIZATION_MEAN, CNN_NORMALIZATION_STD
-        )
-        sharp_denorm = denormalize(
-            sharp_image, CNN_NORMALIZATION_MEAN, CNN_NORMALIZATION_STD
+        # denormalize for metrics
+        outputs_denorm, sharp_denorm = self._denormalize_for_metrics(
+            outputs, sharp_image
         )
 
-        outputs_denorm = torch.clamp(outputs_denorm, 0.0, 1.0)
-        sharp_denorm = torch.clamp(sharp_denorm, 0.0, 1.0)
-
-        psnr = calculate_psnr(outputs_denorm, sharp_denorm)
-        ssim = calculate_ssim(outputs_denorm, sharp_denorm)
-
-        self.log(f"{stage}_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        # log loss
         self.log(
-            f"{stage}_psnr",
-            psnr,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=(stage == "val"),
-        )
-        self.log(
-            f"{stage}_ssim",
-            ssim,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=(stage == "val"),
+            f"{stage}_loss", total_loss, on_step=False, on_epoch=True, prog_bar=True
         )
 
-        return {"loss": loss}
+        # compute and log metrics from config
+        for metric_name, metric_fn in self.metrics.items():
+            metric_val = metric_fn(outputs_denorm, sharp_denorm)
+            self.log(
+                f"{stage}_{metric_name}",
+                metric_val,
+                on_step=False,
+                on_epoch=True,
+                prog_bar=(stage == "val"),
+            )
+
+        return {"loss": total_loss}
 
     def training_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
         result = self._shared_step(batch, stage="train")
@@ -88,15 +111,17 @@ class LitDeblurring(pl.LightningModule):
         self._shared_step(batch, stage="val")
 
     def configure_optimizers(self):
-        optimizer = hydra.utils.instantiate(
-            self.optimizer_cfg, params=self.net.parameters()
-        )
-        if self.scheduler_cfg is None:
-            return optimizer
+        optimizer = self.optimizer(params=self.parameters())
 
-        scheduler = hydra.utils.instantiate(self.scheduler_cfg, optimizer=optimizer)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": scheduler,
-            "monitor": "val_loss",
-        }
+        if self.scheduler is not None:
+            scheduler = self.scheduler(optimizer=optimizer)
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "monitor": "val_loss",
+                    "interval": "epoch",
+                    "frequency": 1,
+                },
+            }
+        return {"optimizer": optimizer}
