@@ -160,8 +160,8 @@ chmod u+x train_e2e.sh
 
 **Доступные конфигурации:**
 
-- `configs/evssm.yaml` — модель EVSSM
-- `configs/convnet.yaml` — простая CNN модель
+- `configs/evssm.yaml` — модель EVSSM (1.4 M)
+- `configs/convnet.yaml` — простая CNN модель (20 K)
 
 Lightning‑колбэки для чекпоинтов и мониторинга lr конфигурируются в соответствующих YAML файлах (секция `callbacks`).
 
