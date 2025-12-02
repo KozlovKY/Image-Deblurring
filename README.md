@@ -62,7 +62,7 @@ source deblur/bin/activate
 # Windows:
 deblur/bin/activate
 
-uv pip install -e .
+uv pip install -e ".[dev]"
 ```
 
 #### 3. Установить pre-commit хуки
@@ -152,10 +152,12 @@ python train.py model.optimizer.lr=1e-3
 ```
 
 Можно запустить весь процесс одним скриптом:
+
 ```bash
 chmod u+x train_e2e.sh
 ./train_e2e.sh
 ```
+
 **Примечание:** Если автоматическое скачивание с Яндекс.Диска не работает, скачайте архив вручную по [ссылке](https://disk.360.yandex.ru/d/6LNWs_woE4JWeA) и поместите его в папку `data/zip/`.
 
 **Доступные конфигурации:**
@@ -166,4 +168,3 @@ chmod u+x train_e2e.sh
 Lightning‑колбэки для чекпоинтов и мониторинга lr конфигурируются в соответствующих YAML файлах (секция `callbacks`).
 
 ---
-
