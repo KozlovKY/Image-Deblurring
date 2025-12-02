@@ -8,13 +8,12 @@ data:
   train_sharp_dir: "data/datasets/rsblur_train_val/sharp_train"
   val_blur_dir: "data/datasets/rsblur_train_val/blur_val"
   val_sharp_dir: "data/datasets/rsblur_train_val/sharp_val"
-  batch_size: 16
+  batch_size: 4
   num_workers: 8
   pin_memory: true
   drop_last: true
 
 model:
-  # Lightning-модуль деблюринга c EVSSM внутри
   _target_: src.training.lit_module.LitDeblurring
   _recursive_: false
   net:
@@ -22,7 +21,7 @@ model:
     inp_channels: 3
     out_channels: 3
     dim: 16
-    num_blocks: [3, 3, 6]
+    num_blocks: [6, 6, 12]
     num_refinement_blocks: 4
     ffn_expansion_factor: 3
     bias: false
