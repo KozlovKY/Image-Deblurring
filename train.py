@@ -3,6 +3,8 @@ import lightning.pytorch as pl
 import torch
 from omegaconf import DictConfig
 
+from src.data.download import ensure_data
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="evssm")
 def main(cfg: DictConfig) -> None:
@@ -19,7 +21,7 @@ def main(cfg: DictConfig) -> None:
     if torch.cuda.is_available():
         torch.set_float32_matmul_precision("medium")
 
-    # ensure_data(stage=None)
+    ensure_data(stage=None)
 
     datamodule = hydra.utils.instantiate(cfg.data_module)
 
