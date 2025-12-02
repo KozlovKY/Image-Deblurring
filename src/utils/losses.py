@@ -3,9 +3,15 @@ import torch.nn as nn
 
 
 class PSNRLoss(nn.Module):
-    def __init__(self, loss_weight=1.0, reduction="mean"):
+    """PSNR loss as a callable module."""
+
+    def __init__(self, loss_weight=1.0) -> None:
+        """Initialize PSNR loss.
+
+        Args:
+            loss_weight: Weight for the loss.
+        """
         super().__init__()
-        assert reduction == "mean"
         self.loss_weight = loss_weight
 
     def forward(self, pred, target):
