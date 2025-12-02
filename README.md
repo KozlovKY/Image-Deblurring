@@ -1,6 +1,4 @@
-## Image Deblurring
-
----
+## Image-Deblurring
 
 ### Описание
 
