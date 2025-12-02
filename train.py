@@ -6,7 +6,7 @@ from omegaconf import DictConfig
 from src.data.download import ensure_data
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="evssm")
+@hydra.main(version_base=None, config_path="configs", config_name="convnet")
 def main(cfg: DictConfig) -> None:
     """Entry point for training with Lightning + Hydra.
 
@@ -47,3 +47,4 @@ def main(cfg: DictConfig) -> None:
 
 if __name__ == "__main__":
     main()
+
