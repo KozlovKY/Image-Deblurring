@@ -6,13 +6,14 @@
 
 ---
 
-Проект для восстановления резкости изображений (image deblurring) с использованием стека **PyTorch Lightning + Hydra**.
+Проект для восстановления резкости изображений.
 
 Основные компоненты:
 
-- **PyTorch / Lightning** — обучение и логика моделей;
+- **PyTorch Lightning** — обучение моделей;
 - **Hydra** — управление конфигами и экспериментами;
 - **MLflow** — логирование экспериментов;
+- **DVC** — версионирование данных;
 
 ---
 
@@ -20,19 +21,24 @@
 
 ---
 
-- **`src/`** — python‑пакет с основным кодом:
-  - **`data/`** — датасеты и аугментации (albumentations);
-  - **`models/`** — модели деблюринга
+- **`src/`** — основной код:
+  - **`data/`** — датасет, аугментации, DVC;
+  - **`models/`** — модели деблюринга (EVSSM, DeblurCNN);
   - **`training/`** — Lightning‑модуль (`LitDeblurring`) и DataModule;
-  - **`utils/`** — метрики, лоссы;
-  - **`scripts/`** — вспомогательные скрипты для инференса.
-- **`configs/`** — конфиги **Hydra** (данные, модель, обучение, логирование).
-- **`data/preprocessing/`** — скрипты подготовки датасета (распаковка RSBlur, генерация `.npy`).
-- **`train.py`** — входная точка обучения (Hydra + PyTorch Lightning).
+  - **`utils/`** — метрики (PSNR, SSIM), лоссы (PSNRLoss), утилиты;
+- **`configs/`** — конфиги **Hydra**;
+- **`data/scripts/`** — скрипты подготовки данных:
+  - `yandex_download.py` — скачивание архива с Я.Диска;
+  - `extract_shards.sh` — распаковка архивов;
+  - `split_train_val.py` — разделение на train/val;
+- **`dvc.yaml`** — DVC-пайплайн подготовки данных;
+- **`train.py`** — входная точка обучения;
+- **`pyproject.toml`** — зависимости проекта (uv);
+- **`.pre-commit-config.yaml`** — конфигурация pre-commit хуков.
 
 ---
 
-### Setup (uv + editable install)
+### Setup
 
 ---
 
@@ -45,8 +51,9 @@ cd Image-Deblurring
 
 #### 2. Создать окружение через `uv` и установить пакет
 
+Окружение рассчитано на Python 3.10, а полный список базовых зависимостей зашит в `pyproject.toml`.
+
 ```bash
-# установить uv, если ещё не установлен
 pip install uv
 uv venv .venv
 
@@ -58,7 +65,19 @@ source .venv/bin/activate
 uv pip install -e .
 ```
 
-Окружение рассчитано на Python 3.10, а полный список базовых зависимостей зашит в `pyproject.toml`.
+#### 3. Установить pre-commit хуки
+
+```bash
+pre-commit install
+
+pre-commit run -a
+```
+
+Используются следующие инструменты для контроля качества кода:
+
+- **ruff** — линтер и форматтер (заменяет black, isort, flake8)
+- **pre-commit hooks** — базовые проверки (YAML, trailing whitespace, end-of-file)
+- **prettier** — форматирование не-Python файлов
 
 ---
 
@@ -66,49 +85,77 @@ uv pip install -e .
 
 ---
 
-Для работы с датасетом **RSBlur** в репозитории есть скрипты предварительной обработки:
+В данном сетапе используется subset из `RSBlur` датасета, оригинальный датасет весит порядка 100 гб, поэтому для проверки системы он был сокращен.
 
-- **`data/preprocessing/extract_datasets.sh`** — распаковка частями заархивированного датасета в `data/datasets/RSBlur/...`;
-- **`data/preprocessing/create_npy_files.py`** — конвертация изображений RSBlur в `.npy` для обучения.
+Подготовка данных интегрирована в **DVC-пайплайн** (`dvc.yaml`) и выполняется автоматически при запуске обучения. Пайплайн состоит из трёх стадий:
 
-Детальная инструкция по шагам приведена в `data/preprocessing/README.md`.
+1. **`rsblur_download`** — скачивание архива датасета с Я.Диска в `data/zip/`
+2. **`rsblur_extract`** — распаковка архивов из `data/zip` в `data/datasets/RSBlur/`
+3. **`rsblur_split`** — разделение данных на train/val и создание финального датасета в `data/datasets/rsblur_train_val/`
 
-Дополнительно подготовка данных интегрирована в **dvc-пайплайн** (`dvc.yaml`):
+При запуске `python train.py` автоматически вызывается `dvc repro`, который выполняет все необходимые стадии пайплайна.
 
-- стадия `rsblur_extract` — распаковка шардов из `data/zip` в `data/datasets/RSBlur`;
-- стадия `rsblur_npy` — генерация `.npy` файлов.
+**Ручной запуск пайплайна:**
 
-При запуске обучения `train.py` автоматически вызовет `dvc repro rsblur_npy` (если `dvc` установлен и `dvc.yaml` присутствует), что соответствует требованиям задания по Data management.
+```bash
+# Запустить весь пайплайн
+dvc repro
+
+# Или запустить конкретную стадию
+dvc repro rsblur_download    # только скачивание
+dvc repro rsblur_extract      # только распаковка
+dvc repro rsblur_split        # только разделение
+```
+
+### MLflow Setup
+
+Перед запуском тренировки нужно запустить MLflow сервер:
+
+```bash
+mlflow server --host 127.0.0.1 --port 8080
+```
+
+Сервер будет доступен по адресу `http://127.0.0.1:8080`.
 
 ---
 
-### Обучение моделей
+### Train
 
 ---
 
-Обучение управляется конфигами **Hydra** (по умолчанию `configs/evssm.yaml`) и `PyTorch Lightning Trainer`.
+#### Обучение моделей
 
-- **Базовый запуск (EVSSM)**:
+Обучение управляется конфигами **Hydra** (по умолчанию `configs/convnet.yaml`) и `PyTorch Lightning Trainer`.
+
+**Базовый запуск:**
 
 ```bash
 python train.py
 ```
 
-Hydra создаст рабочую директорию в `./outputs/...`, а гиперпараметры возьмёт из `configs/evssm.yaml`.
+При запуске автоматически:
 
-- **Примеры оверрайдов из CLI**:
+1. Выполняется DVC-пайплайн подготовки данных (скачивание → распаковка → разделение)
+2. Создаётся рабочая директория в `outputs/YYYY-MM-DD/HH-MM-SS/`
+3. Сохраняются чекпоинты в `outputs/.../checkpoints/`
+4. Логируются метрики в MLflow
+
+Возможно установить свои параметры, переписав значения конфигов.
+**Примеры оверрайдов из CLI:**
 
 ```bash
-# изменить число эпох и батч-сайз
 python train.py train.epochs=50 data.batch_size=8
 
-# изменить директорию с данными (внутри должны быть подпапки blur/ и sharp/)
-python train.py data.data_dir="path/to/data_root"
-
-# запустить альтернативную модель (convnet вместо EVSSM)
 python train.py --config-name convnet
+
+python train.py model.optimizer.lr=1e-3
 ```
 
-Lightning‑колбэки для чекпоинтов и мониторинга lr конфигурируются в `configs/evssm.yaml` / `configs/convnet.yaml` (секция `callbacks`).
+**Доступные конфигурации:**
+
+- `configs/evssm.yaml` — модель EVSSM
+- `configs/convnet.yaml` — простая CNN модель
+
+Lightning‑колбэки для чекпоинтов и мониторинга lr конфигурируются в соответствующих YAML файлах (секция `callbacks`).
 
 ---
