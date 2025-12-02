@@ -55,12 +55,12 @@ cd Image-Deblurring
 
 ```bash
 pip install uv
-uv venv .venv
+uv venv deblur --python 3.11
 
 # Linux / macOS:
-source .venv/bin/activate
+source deblur/bin/activate
 # Windows:
-.venv\Scripts\Activate.ps1
+deblur/bin/activate
 
 uv pip install -e .
 ```
@@ -150,6 +150,13 @@ python train.py --config-name convnet
 
 python train.py model.optimizer.lr=1e-3
 ```
+
+Можно запустить весь процесс одним скриптом:
+```bash
+chmod u+x train_e2e.sh
+./train_e2e.sh
+```
+**Примечание:** Если автоматическое скачивание с Яндекс.Диска не работает, скачайте архив вручную по [ссылке](https://disk.360.yandex.ru/d/6LNWs_woE4JWeA) и поместите его в папку `data/zip/`.
 
 **Доступные конфигурации:**
 
