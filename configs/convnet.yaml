@@ -12,6 +12,17 @@ data:
   num_workers: 8
   pin_memory: true
   drop_last: true
+  transforms_cfg:
+    crop_size: 256
+    flip_prob: 0.5
+    random_rotate90_prob: 0.5
+    affine_or_noop_prob: 0.5
+    affine_scale_range: [0.9, 1.1]
+    affine_rotate_range: [-10, 10]
+    affine_shear_range: [-5, 5]
+    downsample_factor: 32
+    cnn_normalization_mean: [0.485, 0.456, 0.406]
+    cnn_normalization_std: [0.229, 0.224, 0.225]
 
 model:
   _target_: src.training.lit_module.LitDeblurring
@@ -58,6 +69,7 @@ data_module:
   num_workers: ${data.num_workers}
   pin_memory: ${data.pin_memory}
   drop_last: ${data.drop_last}
+  transforms_cfg: ${data.transforms_cfg}
 
 trainer:
   _target_: lightning.pytorch.trainer.Trainer
