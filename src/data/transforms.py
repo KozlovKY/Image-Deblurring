@@ -1,81 +1,106 @@
+"""Image augmentation and preprocessing pipelines with Hydra config support."""
+
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
+from omegaconf import DictConfig
 
 
-# Custom transformation to crop to dimensions divisible by 32
-class CropToDivisibleBy32(A.DualTransform):
-    """Crop image to make both height and width divisible by 32"""
+class CropToDivisibleByFactor(A.DualTransform):
+    """Crop image to make both height and width divisible by `factor`."""
 
-    def __init__(self, always_apply=False, p=1.0):
-        super(CropToDivisibleBy32, self).__init__(always_apply, p)
+    def __init__(
+        self,
+        factor: int,
+        always_apply: bool = False,
+        p: float = 1.0,
+    ):
+        super().__init__(always_apply, p)
+        self.factor = factor
 
     def apply(self, img, **params):
         h, w = img.shape[:2]
-        # Calculate new dimensions divisible by 32
-        new_h = (h // 32) * 32
-        new_w = (w // 32) * 32
-        # Calculate crop coordinates (center crop)
+        new_h = (h // self.factor) * self.factor
+        new_w = (w // self.factor) * self.factor
+
         start_y = (h - new_h) // 2
         start_x = (w - new_w) // 2
 
         return img[start_y : start_y + new_h, start_x : start_x + new_w]
 
     def apply_to_bbox(self, bbox, **params):
-        # Handle bounding boxes if needed (not used in our case)
         return bbox
 
     def apply_to_keypoint(self, keypoint, **params):
-        # Handle keypoints if needed (not used in our case)
         return keypoint
 
     def get_transform_init_args_names(self):
-        return ()
+        return ("factor",)
 
 
-CNN_NORMALIZATION_MEAN = [0.485, 0.456, 0.406]
-CNN_NORMALIZATION_STD = [0.229, 0.224, 0.225]
+def build_transforms(cfg: DictConfig, split: str) -> A.Compose:
+    """
+    Build augmentation pipeline from Hydra config.
+    Returns:
+        Configured albumentations.Compose pipeline
+    """
 
-TRAIN_TRANSFORMS = A.Compose(
-    [
-        A.RandomCrop(width=256, height=256, always_apply=True),
-        A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        A.RandomRotate90(p=0.5),
-        A.OneOf(
+    norm_transform = A.Normalize(
+        mean=cfg.cnn_normalization_mean,
+        std=cfg.cnn_normalization_std,
+        always_apply=True,
+    )
+
+    if split == "train":
+        return A.Compose(
             [
-                A.Affine(scale=(0.9, 1.1), rotate=(-10, 10), shear=(-5, 5), p=1.0),
-                A.NoOp(p=1.0),
+                A.RandomCrop(
+                    width=cfg.crop_size, height=cfg.crop_size, always_apply=True
+                ),
+                A.HorizontalFlip(p=cfg.flip_prob),
+                A.VerticalFlip(p=cfg.flip_prob),
+                A.RandomRotate90(p=cfg.random_rotate90_prob),
+                A.OneOf(
+                    [
+                        A.Affine(
+                            scale=tuple(cfg.affine_scale_range),
+                            rotate=tuple(cfg.affine_rotate_range),
+                            shear=tuple(cfg.affine_shear_range),
+                            p=1.0,
+                        ),
+                        A.NoOp(p=1.0),
+                    ],
+                    p=cfg.affine_or_noop_prob,
+                ),
+                norm_transform,
+                ToTensorV2(),
             ],
-            p=0.5,
-        ),
-        A.Normalize(
-            mean=CNN_NORMALIZATION_MEAN, std=CNN_NORMALIZATION_STD, always_apply=True
-        ),
-        ToTensorV2(),
-    ],
-    additional_targets={"image0": "image"},
-)
+            additional_targets={"image0": "image"},
+        )
 
-TEST_TRANSFORMS = A.Compose(
-    [
-        A.CenterCrop(width=256, height=256, always_apply=True),
-        A.Normalize(
-            mean=CNN_NORMALIZATION_MEAN, std=CNN_NORMALIZATION_STD, always_apply=True
-        ),
-        ToTensorV2(),
-    ],
-    additional_targets={"image0": "image"},
-)
+    elif split == "test":
+        return A.Compose(
+            [
+                A.CenterCrop(
+                    width=cfg.crop_size, height=cfg.crop_size, always_apply=True
+                ),
+                norm_transform,
+                ToTensorV2(),
+            ],
+            additional_targets={"image0": "image"},
+        )
 
-EVAL_TRANSFORMS = A.Compose(
-    [
-        CropToDivisibleBy32(
-            always_apply=True
-        ),  # Crop to make dimensions divisible by 32
-        A.Normalize(
-            mean=CNN_NORMALIZATION_MEAN, std=CNN_NORMALIZATION_STD, always_apply=True
-        ),
-        ToTensorV2(),
-    ],
-    additional_targets={"image0": "image"},
-)
+    elif split == "val":
+        return A.Compose(
+            [
+                CropToDivisibleByFactor(
+                    factor=cfg.downsample_factor,
+                    always_apply=True,
+                ),
+                norm_transform,
+                ToTensorV2(),
+            ],
+            additional_targets={"image0": "image"},
+        )
+
+    else:
+        raise ValueError(f"Unknown split: {split}. Use 'train', 'test', or 'val'")

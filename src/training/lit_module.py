@@ -5,7 +5,6 @@ import lightning.pytorch as pl
 import torch
 from omegaconf import DictConfig
 
-from src.data.transforms import CNN_NORMALIZATION_MEAN, CNN_NORMALIZATION_STD
 from src.utils.denormalize import denormalize
 
 
@@ -60,12 +59,8 @@ class LitDeblurring(pl.LightningModule):
         self, outputs: torch.Tensor, sharp_image: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Denormalize and clamp images to [0, 1] range for metric computation."""
-        outputs_denorm = denormalize(
-            outputs, CNN_NORMALIZATION_MEAN, CNN_NORMALIZATION_STD
-        )
-        sharp_denorm = denormalize(
-            sharp_image, CNN_NORMALIZATION_MEAN, CNN_NORMALIZATION_STD
-        )
+        outputs_denorm = denormalize(outputs)
+        sharp_denorm = denormalize(sharp_image)
         outputs_denorm = torch.clamp(outputs_denorm, 0.0, 1.0)
         sharp_denorm = torch.clamp(sharp_denorm, 0.0, 1.0)
         return outputs_denorm, sharp_denorm

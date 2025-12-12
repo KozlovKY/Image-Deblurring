@@ -2,10 +2,11 @@ from typing import Optional
 
 import lightning.pytorch as pl
 from hydra.utils import to_absolute_path
+from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
 from src.data.datasets import BlurImageDataset
-from src.data.transforms import TEST_TRANSFORMS, TRAIN_TRANSFORMS
+from src.data.transforms import build_transforms
 
 
 class DeblurDataModule(pl.LightningDataModule):
@@ -17,10 +18,11 @@ class DeblurDataModule(pl.LightningDataModule):
         train_sharp_dir: str,
         val_blur_dir: str,
         val_sharp_dir: str,
-        batch_size: int = 16,
-        num_workers: int = 8,
-        pin_memory: bool = True,
-        drop_last: bool = True,
+        batch_size: int,
+        num_workers: int,
+        pin_memory: bool,
+        drop_last: bool,
+        transforms_cfg: DictConfig,
     ) -> None:
         super().__init__()
         self.train_blur_dir = train_blur_dir
@@ -35,6 +37,9 @@ class DeblurDataModule(pl.LightningDataModule):
         self.train_dataset: Optional[BlurImageDataset] = None
         self.val_dataset: Optional[BlurImageDataset] = None
 
+        self.train_transforms = build_transforms(transforms_cfg, split="train")
+        self.val_transforms = build_transforms(transforms_cfg, split="val")
+
     def setup(self, stage: Optional[str] = None) -> None:
         train_blur_dir = to_absolute_path(self.train_blur_dir)
         train_sharp_dir = to_absolute_path(self.train_sharp_dir)
@@ -44,12 +49,12 @@ class DeblurDataModule(pl.LightningDataModule):
         self.train_dataset = BlurImageDataset(
             blur_dir=train_blur_dir,
             sharp_dir=train_sharp_dir,
-            transforms=TRAIN_TRANSFORMS,
+            transforms=self.train_transforms,
         )
         self.val_dataset = BlurImageDataset(
             blur_dir=val_blur_dir,
             sharp_dir=val_sharp_dir,
-            transforms=TEST_TRANSFORMS,
+            transforms=self.val_transforms,
         )
 
     def train_dataloader(self) -> DataLoader:
