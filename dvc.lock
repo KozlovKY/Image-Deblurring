@@ -29,13 +29,13 @@ stages:
       nfiles: 2488
     - path: data/datasets/RSblur_splits/RSBlur_real_train.txt
       hash: md5
-      md5: 5a23d4692ed363c4bcafe8b88ebf56ba
-      size: 692484
+      md5: cf31e11d3a7fcddd8e42a91a2d21cf21
+      size: 701362
       isexec: true
     - path: data/datasets/RSblur_splits/RSBlur_real_val.txt
       hash: md5
-      md5: fa419f14462f6ee8dda1474557371f2b
-      size: 87360
+      md5: 21d29d2efb5d50217a474b343c31d717
+      size: 88480
       isexec: true
     - path: data/scripts/split_train_val.py
       hash: md5
